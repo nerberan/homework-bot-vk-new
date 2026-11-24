@@ -4,6 +4,7 @@ import time
 
 import requests
 import vk_api
+import uuid
 from dotenv import load_dotenv
 from vk_api.exceptions import ApiError
 
@@ -36,7 +37,8 @@ logging.basicConfig(
 def check_tokens():
     """
     Проверяет наличие обязательных переменных окружения.
-    Отсутствие обязательных переменных окружения (уровень CRITICAL).
+    Проверка отсутствия обязательных переменных
+    окружения (уровень CRITICAL).
     """
     tokens = {
         'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
@@ -48,8 +50,7 @@ def check_tokens():
         logging.critical(
             f'Отсутствуют переменные окружения: {", ".join(missing)}'
         )
-        return False
-    return True
+        raise ValueError('Критические переменные окружения не заданы')
 
 
 def send_message(vk, message):
@@ -64,11 +65,13 @@ def send_message(vk, message):
         vk.messages.send(
             user_id=VK_USER_ID,
             message=message,
-            random_id=int(time.time() * 1000),
+            random_id=uuid.uuid4().int,
         )
         logging.debug(f'Сообщение успешно отправлено: {message!r}')
     except ApiError as error:
-        logging.error(f'Ошибка отправки сообщения: {error}', exc_info=True)
+        logging.error(f'Ошибка API VK: {error}', exc_info=True)
+    except Exception as error:
+        logging.error(f'Общая ошибка отправки: {error}', exc_info=True)
 
 
 def get_api_answer(timestamp):
@@ -110,7 +113,7 @@ def check_response(response):
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
         raise TypeError(
-            f'Получен ключ {type(homeworks)}'
+            f'"homeworks" не является списком: {type(homeworks)}'
         )
     return homeworks
 
@@ -138,8 +141,7 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    if not check_tokens():
-        return
+    check_tokens()
 
     vk_session = vk_api.VkApi(token=VK_TOKEN)
     vk = vk_session.get_api()
@@ -150,29 +152,29 @@ def main():
     while True:
         try:
             response = get_api_answer(timestamp)
+            # Получаем список работ
             homeworks = check_response(response)
 
             if not homeworks:
-                logging.debug(
-                    'В ответе API нет новых статусов домашних работ.'
-                )
+                logging.debug('В ответе API нет домашних работ.')
             else:
                 for homework in homeworks:
-                    status_text = parse_status(homework)
-                    send_message(vk, status_text)
+                    try:
+                        status_text = parse_status(homework)
+                        send_message(vk, status_text)
+                    except Exception as error:
+                        logging.error(
+                            f'{homework.get("homework_name")}: {error}'
+                        )
 
             timestamp = int(time.time())
             last_error = None
         except Exception as error:
-            logging.error(
-                f'Сбой в работе программы: {error}', exc_info=True
-            )
-
+            logging.error(f'Сбой в работе программы: {error}', exc_info=True)
             error_text = f'{type(error).__name__}: {error}'
             if error_text != last_error:
                 send_message(vk, f'Сбой в работе программы: {error}')
                 last_error = error_text
-
         finally:
             time.sleep(RETRY_PERIOD)
 
