@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from vk_api.exceptions import ApiError
 
 load_dotenv()
+TIMEOUT = 30
 
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
@@ -25,13 +26,6 @@ HOMEWORK_VERDICTS = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
-
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    filename='program.log',
-    format='%(asctime)s, %(levelname)s, %(message)s, %(name)s'
-)
 
 
 def check_tokens():
@@ -68,10 +62,12 @@ def send_message(vk, message):
             random_id=uuid.uuid4().int,
         )
         logging.debug(f'Сообщение успешно отправлено: {message!r}')
-    except ApiError as error:
-        logging.error(f'Ошибка API VK: {error}', exc_info=True)
-    except Exception as error:
-        logging.error(f'Общая ошибка отправки: {error}', exc_info=True)
+        return True
+    except (ApiError, requests.RequestException) as error:
+        logging.error(
+            f'Ошибка отправки сообщения в VK: {error}', exc_info=True
+        )
+        return False
 
 
 def get_api_answer(timestamp):
@@ -81,24 +77,38 @@ def get_api_answer(timestamp):
     Любые другие сбои при запросе к эндпоинту (уровень ERROR).
     """
     params = {'from_date': timestamp}
+
+    safe_headers = {}
+    for key, value in HEADERS.items():
+        if key == 'Authorization':
+            safe_headers[key] = 'REDACTED'
+        else:
+            safe_headers[key] = value
+
+    request_info = (
+        f'ENDPOINT={ENDPOINT}, '
+        f'headers={safe_headers}, '
+        f'params={params}, '
+        f'timeout={TIMEOUT}'
+    )
+
     try:
         response = requests.get(
-            ENDPOINT, headers=HEADERS, params=params, timeout=30
+            ENDPOINT, headers=HEADERS, params=params, timeout=TIMEOUT
         )
     except requests.RequestException as error:
         raise ConnectionError(
-            f'Эндпоинт {ENDPOINT} недоступен: {error}'
+            f'Эндпоинт недоступен. Запрос: {request_info}. '
+            f'Ошибка: {error}'
         ) from error
 
-    if response.status_code != 200:
+    if response.status_code != requests.codes.ok:
         raise ValueError(
-            f'Эндпоинт {ENDPOINT} вернул код {response.status_code}: '
-            f'{response.text}'
+            f'Эндпоинт вернул код {response.status_code}. '
+            f'Запрос: {request_info}. Ответ: {response.text}'
         )
-    try:
-        return response.json()
-    except ValueError as error:
-        raise ValueError(f'Ответ API не является JSON: {error}') from error
+
+    return response.json()
 
 
 def check_response(response):
@@ -148,35 +158,41 @@ def main():
 
     timestamp = int(time.time())
     last_error = None
+    last_status = None
 
     while True:
         try:
             response = get_api_answer(timestamp)
-            # Получаем список работ
             homeworks = check_response(response)
 
             if not homeworks:
                 logging.debug('В ответе API нет домашних работ.')
             else:
-                for homework in homeworks:
-                    try:
-                        status_text = parse_status(homework)
-                        send_message(vk, status_text)
-                    except Exception as error:
-                        logging.error(
-                            f'{homework.get("homework_name")}: {error}'
-                        )
+                homework = homeworks[-1]
+                status_text = parse_status(homework)
+                if status_text != last_status:
+                    if send_message(vk, status_text):
+                        last_status = status_text
 
-            timestamp = int(time.time())
+            timestamp = response.get('current_date', int(time.time()))
             last_error = None
+
         except Exception as error:
             logging.error(f'Сбой в работе программы: {error}', exc_info=True)
             error_text = f'{type(error).__name__}: {error}'
             if error_text != last_error:
-                send_message(vk, f'Сбой в работе программы: {error}')
-                last_error = error_text
+                if send_message(vk, f'Сбой в работе программы: {error}'):
+                    last_error = error_text
+
         finally:
             time.sleep(RETRY_PERIOD)
+
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    filename='program.log',
+    format='%(asctime)s, %(levelname)s, %(message)s, %(name)s'
+)
 
 
 if __name__ == '__main__':
