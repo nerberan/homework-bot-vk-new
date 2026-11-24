@@ -188,12 +188,10 @@ def main():
             time.sleep(RETRY_PERIOD)
 
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    filename='program.log',
-    format='%(asctime)s, %(levelname)s, %(message)s, %(name)s'
-)
-
-
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.DEBUG,
+        filename='program.log',
+        format='%(asctime)s, %(levelname)s, %(message)s, %(name)s'
+    )
     main()
