@@ -6,7 +6,7 @@ import requests
 import vk_api
 import uuid
 from dotenv import load_dotenv
-from vk_api.exceptions import ApiError
+from vk_api.exceptions import VkApiError
 
 load_dotenv()
 TIMEOUT = 30
@@ -63,7 +63,7 @@ def send_message(vk, message):
         )
         logging.debug(f'Сообщение успешно отправлено: {message!r}')
         return True
-    except (ApiError, requests.RequestException) as error:
+    except VkApiError as error:
         logging.error(
             f'Ошибка отправки сообщения в VK: {error}', exc_info=True
         )
