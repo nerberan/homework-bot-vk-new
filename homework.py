@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 import time
 
 import requests
@@ -37,7 +36,7 @@ logging.basicConfig(
 def check_tokens():
     """
     Проверяет наличие обязательных переменных окружения.
-    Отсутствие обязательных переменных окружения (уровень CRITICAL)
+    Отсутствие обязательных переменных окружения (уровень CRITICAL).
     """
     tokens = {
         'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
@@ -47,7 +46,7 @@ def check_tokens():
     missing = [name for name, value in tokens.items() if not value]
     if missing:
         logging.critical(
-            f'Отсутствуют обязательные переменные окружения: {", ".join(missing)}'
+            f'Отсутствуют переменные окружения: {", ".join(missing)}'
         )
         return False
     return True
@@ -55,9 +54,9 @@ def check_tokens():
 
 def send_message(vk, message):
     """
-    Отправляет сообщение
-    Удачная отправка любого сообщения в VK (уровень DEBUG)
-    Сбой при отправке сообщения в VK (уровень ERROR)
+    Отправляет сообщение.
+    Удачная отправка любого сообщения в VK (уровень DEBUG).
+    Сбой при отправке сообщения в VK (уровень ERROR).
     """
     if not message:
         return
@@ -72,12 +71,11 @@ def send_message(vk, message):
         logging.error(f'Ошибка отправки сообщения: {error}', exc_info=True)
 
 
-
 def get_api_answer(timestamp):
     """
-    Запрашивает статусы домашних работ
-    Недоступность эндпоинта (уровень ERROR)
-    Любые другие сбои при запросе к эндпоинту (уровень ERROR)
+    Запрашивает статусы домашних работ.
+    Недоступность эндпоинта (уровень ERROR).
+    Любые другие сбои при запросе к эндпоинту (уровень ERROR).
     """
     params = {'from_date': timestamp}
     try:
@@ -85,7 +83,9 @@ def get_api_answer(timestamp):
             ENDPOINT, headers=HEADERS, params=params, timeout=30
         )
     except requests.RequestException as error:
-        raise ConnectionError(f'Эндпоинт {ENDPOINT} недоступен: {error}') from error
+        raise ConnectionError(
+            f'Эндпоинт {ENDPOINT} недоступен: {error}'
+        ) from error
 
     if response.status_code != 200:
         raise ValueError(
@@ -100,8 +100,8 @@ def get_api_answer(timestamp):
 
 def check_response(response):
     """
-    Проверяет структуру ответа и возвращает список домашних работ
-    Отсутствие ожидаемых ключей в ответе API (уровень ERROR)
+    Проверяет структуру ответа и возвращает список домашних работ.
+    Отсутствие ожидаемых ключей в ответе API (уровень ERROR).
     """
     if not isinstance(response, dict):
         raise TypeError(f'Ответ API не является словарём: {type(response)}')
@@ -110,15 +110,15 @@ def check_response(response):
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
         raise TypeError(
-            f'Ключ "homeworks" должен содержать список, получен {type(homeworks)}'
+            f'Получен ключ {type(homeworks)}'
         )
     return homeworks
 
 
 def parse_status(homework):
     """
-    Возвращает текст сообщения о смене статуса домашней работы
-    Неожиданный статус домашней работы в ответе API (уровень ERROR);
+    Возвращает текст сообщения о смене статуса домашней работы.
+    Неожиданный статус домашней работы в ответе API (уровень ERROR).
     Отсутствие в ответе новых статусов (уровень DEBUG).
     """
     if 'homework_name' not in homework:
@@ -134,7 +134,6 @@ def parse_status(homework):
         raise ValueError(f'Неожиданный статус домашней работы: {status!r}')
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
-
 
 
 def main():
@@ -154,15 +153,16 @@ def main():
             homeworks = check_response(response)
 
             if not homeworks:
-                logging.debug('В ответе API нет новых статусов домашних работ.')
+                logging.debug(
+                    'В ответе API нет новых статусов домашних работ.'
+                )
             else:
                 for homework in homeworks:
                     status_text = parse_status(homework)
                     send_message(vk, status_text)
 
             timestamp = int(time.time())
-            last_error = None  
-
+            last_error = None
         except Exception as error:
             logging.error(
                 f'Сбой в работе программы: {error}', exc_info=True
