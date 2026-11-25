@@ -157,7 +157,7 @@ def main():
     vk = vk_session.get_api()
 
     timestamp = int(time.time())
-    last_error = None
+    last_sent_message = None
 
     while True:
         try:
@@ -169,9 +169,9 @@ def main():
             else:
                 homework = homeworks[-1]
                 status_text = parse_status(homework)
-                if status_text != last_error:
+                if status_text != last_sent_message:
                     if send_message(vk, status_text):
-                        last_error = status_text
+                        last_sent_message = status_text
 
             if 'current_date' in response:
                 timestamp = response['current_date']
@@ -182,9 +182,9 @@ def main():
         except Exception as error:
             logging.error(f'Сбой в работе программы: {error}', exc_info=True)
             error_text = f'{type(error).__name__}: {error}'
-            if error_text != last_error:
+            if error_text != last_sent_message:
                 if send_message(vk, f'Сбой в работе программы: {error_text}'):
-                    last_error = error_text
+                    last_sent_message = error_text
 
         finally:
             time.sleep(RETRY_PERIOD)
