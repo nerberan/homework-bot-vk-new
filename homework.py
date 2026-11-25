@@ -158,7 +158,6 @@ def main():
 
     timestamp = int(time.time())
     last_error = None
-    last_status = None
 
     while True:
         try:
@@ -170,18 +169,21 @@ def main():
             else:
                 homework = homeworks[-1]
                 status_text = parse_status(homework)
-                if status_text != last_status:
+                if status_text != last_error:
                     if send_message(vk, status_text):
-                        last_status = status_text
+                        last_error = status_text
 
-            timestamp = response.get('current_date', int(time.time()))
-            last_error = None
+            if 'current_date' in response:
+                timestamp = response['current_date']
+            else:
+                logging.warning('Ключ current_date отсутствует в ответе API')
+                timestamp = int(time.time())
 
         except Exception as error:
             logging.error(f'Сбой в работе программы: {error}', exc_info=True)
             error_text = f'{type(error).__name__}: {error}'
             if error_text != last_error:
-                if send_message(vk, f'Сбой в работе программы: {error}'):
+                if send_message(vk, f'Сбой в работе программы: {error_text}'):
                     last_error = error_text
 
         finally:
